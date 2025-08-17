@@ -3,7 +3,6 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from config.logger import jobs_logger as logger
 
 IMPO_BASE_URL = "https://www.impo.com.uy/"
 IMPO_SEARCH_URL = "https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3&realizarconsulta=SI&idconsulta={}&nrodocdesdehasta={}-{}"
@@ -11,15 +10,16 @@ IMPO_SEARCH_URL = "https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tip
 
 async def scrape_norms(start_date: datetime, end_date: datetime, type: int):
     try:
-        path_file = (
-            Path(__file__).resolve().parent.parent.parent / "data" / "norms_links.txt"
-        )
+        import os
+        print("[IMPO SCRAPER] Scraping norms for period: {} to {}".format(start_date.strftime("%d/%m/%Y"), end_date.strftime("%d/%m/%Y")))
+        base_data_path = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
+        path_file = base_data_path / "norms_links.txt"
         path_file.parent.mkdir(parents=True, exist_ok=True)
         file = open(path_file, "a")
 
         async with async_playwright() as p:
             norm_count = 0
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(headless=False)
             context = await browser.new_context()
             page = await context.new_page()
 

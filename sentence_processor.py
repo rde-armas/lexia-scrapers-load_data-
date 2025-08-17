@@ -9,7 +9,7 @@ import requests
 from scraper import sentences_scraper
 from sentence_html_ingestor import SentenceHTMLIngestor
 
-API_URL = "http://api.lvh.me:3000/v1/sentences"
+API_URL = "https://lexia.uy/v1/sentences"
 
 BASE_DATA_PATH = Path(
     os.getenv("LEXIA_BRAIN_DATA_PATH", Path(__file__).resolve().parent.parent / "data")

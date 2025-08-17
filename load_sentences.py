@@ -16,7 +16,7 @@ import requests
 from sentence_html_ingestor import SentenceHTMLIngestor
 
 # Configuración
-API_URL = "http://api.lvh.me:3000/v1/sentences"
+API_URL = "https://lexia.uy/v1/sentences"
 BASE_DATA_PATH = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
 SENTENCES_HTML_DIR = BASE_DATA_PATH / "sentences" / "html"
 PROCESSED_JSON_DIR = BASE_DATA_PATH / "sentences" / "json"

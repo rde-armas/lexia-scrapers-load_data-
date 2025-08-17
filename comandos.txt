@@ -9,3 +9,14 @@ python load_sentences.py --start-date 01/01/2024 --end-date 31/01/2024 --no-exis
 
 
 python load_sentences.py --help
+
+NORMAS
+
+-->Procesar un tipo específico:
+python load_normas.py --norm-type law --start-date 17/06/2025 --end-date 17/08/2025
+
+-->Procesar todos los tipos:
+python load_normas.py --all-types --start-date 17/06/2025 --end-date 17/08/2025
+
+-->Solo archivos existentes (sin scraping):
+python load_normas.py --all-types --no-existing
