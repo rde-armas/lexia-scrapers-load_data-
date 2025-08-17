@@ -1,0 +1,11 @@
+-->Procesar solo archivos existentes:
+python load_sentences.py
+
+-->Procesar período específico (con scraping):
+python load_sentences.py --start-date 01/01/2024 --end-date 31/01/2024
+
+-->Solo scraping (sin procesar archivos existentes):
+python load_sentences.py --start-date 01/01/2024 --end-date 31/01/2024 --no-existing
+
+
+python load_sentences.py --help

@@ -33,12 +33,20 @@ class IngestorService(Service):
         print(
             f"[EMBEDDING] Generating embeddings for {len(self.documents)} documents of type {self.record_type} with {self.token_limit} tokens limit"
         )
+        
+        if not self.documents or all(not doc.strip() for doc in self.documents):
+            print("[EMBEDDING] ERROR: No valid documents to process!")
+            self.result.add_error("No valid documents to process")
+            return
+            
         embeddings: list[list[float]] = self.generate_embeddings(self.documents)
 
         self.result["record_id"] = self.record_id
         self.result["record_type"] = self.record_type
         self.result[f"{self.record_type}"] = self.documents
         self.result["embeddings"] = embeddings
+        
+        print(f"[EMBEDDING] Successfully generated {len(embeddings)} embeddings for {len(self.documents)} documents")
 
     def generate_embeddings(self, document_list: List[str]) -> List[List[float]]:
         try:

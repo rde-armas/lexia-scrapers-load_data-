@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -21,17 +20,17 @@ class SentenceHTMLIngestor():
     def ingest_file(self, file: Path) -> Optional[Dict[str, Any]]:
 
         if not file.exists():
-            logger.error(f"[INGESTOR] Ruta de archivo no existente: {file}")
+            print(f"[INGESTOR] Ruta de archivo no existente: {file}")
             return None
 
-        logger.info(f"[INGESTOR] Ingiriendo archivo HTML: {file.name}")
+        print(f"[INGESTOR] Ingiriendo archivo HTML: {file.name}")
 
         try:
             processed_data = self._parse_html_to_structured_data(file)
             main_text = processed_data.get("text")
 
-            if main_text:
-                logger.info(f"[INGESTOR] Generando embeddings para {file.name}...")
+            if main_text and self.force_chunking:
+                print(f"[INGESTOR] Generando embeddings para {file.name}...")
 
                 embedding_chunks_service = TextIngestorService(
                     text=main_text,
@@ -41,7 +40,7 @@ class SentenceHTMLIngestor():
                     force_chunking=self.force_chunking,
                 )
 
-                chunks_embedding_result = embedding_chunks_service._execute()
+                chunks_embedding_result = embedding_chunks_service.run()
 
                 if chunks_embedding_result.success():
                     chunks = chunks_embedding_result.data.get("chunked_sentence", [])
@@ -51,12 +50,10 @@ class SentenceHTMLIngestor():
                         for chunk, vector in zip(chunks, embeddings)
                     ]
                 else:
-                    logger.error(
-                        f"[INGESTOR] Error al generar embeddings para {file.name}: {chunks_embedding_result.error()}"
+                    print(
+                        f"[INGESTOR] Error al generar embeddings cortos para {file.name}: {chunks_embedding_result.errors()}"
                     )
-                    raise RuntimeError(
-                        f"Error al generar embeddings para {file.name}: {chunks_embedding_result.error()}"
-                    )
+                    processed_data["short_embeddings_attributes"] = []
 
                 full_embedding_service = TextIngestorService(
                     text=main_text,
@@ -64,7 +61,7 @@ class SentenceHTMLIngestor():
                     record_type="sentence",
                     force_chunking=False,
                 )
-                full_result = full_embedding_service._execute()
+                full_result = full_embedding_service.run()
 
                 if full_result.success():
                     full_text_chunk = [main_text]
@@ -74,15 +71,13 @@ class SentenceHTMLIngestor():
                         for chunk, vector in zip(full_text_chunk, full_text_embeddings)
                     ]
                 else:
-                    logger.error(
-                        f"[INGESTOR] Error al generar embeddings para {file.name}: {full_result.error()}"
+                    print(
+                        f"[INGESTOR] Error al generar embeddings largos para {file.name}: {full_result.errors()}"
                     )
-                    raise RuntimeError(
-                        f"Error al generar embeddings para {file.name}: {full_result.error()}"
-                    )
+                    processed_data["long_embeddings_attributes"] = []
 
-                logger.info(
-                    f"[INGESTOR] Embeddings generados exitosamente para {file.name}"
+                print(
+                    f"[INGESTOR] Embeddings procesados para {file.name}"
                 )
             else:
                 logger.warning(
@@ -91,15 +86,14 @@ class SentenceHTMLIngestor():
                 processed_data["short_embeddings_attributes"] = []
                 processed_data["long_embeddings_attributes"] = []
 
-            logger.info(
+            print(
                 f"[INGESTOR] Procesado exitosamente {file.name}, id: {processed_data['id']}"
             )
             return processed_data
 
         except Exception as e:
-            logger.error(
-                f"[INGESTOR] Ocurrió un error inesperado al ingerir {file.name}: {e}",
-                exc_info=True,
+            print(
+                f"[INGESTOR] Ocurrió un error inesperado al ingerir {file.name}: {e}"
             )
             return None
 

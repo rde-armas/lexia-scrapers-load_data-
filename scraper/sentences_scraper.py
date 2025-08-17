@@ -316,7 +316,7 @@ async def scrape_sentences(
         task_firm = f"[{session_start_date.strftime('%d/%m/%Y')} - {session_end_date.strftime('%d/%m/%Y')}]"
 
         print(
-            f"[SENTENCES SCRAPING] {task_firm} Error encountered: {e}", exc_info=True
+            f"[SENTENCES SCRAPING] {task_firm} Error encountered: {e}"
         )
 
         if retry_count < MAX_RETRIES:

@@ -9,7 +9,7 @@ import requests
 from scraper import sentences_scraper
 from sentence_html_ingestor import SentenceHTMLIngestor
 
-API_URL = "http://localhost:8000/api/sentences/"
+API_URL = "http://api.lvh.me:3000/v1/sentences"
 
 BASE_DATA_PATH = Path(
     os.getenv("LEXIA_BRAIN_DATA_PATH", Path(__file__).resolve().parent.parent / "data")
@@ -19,7 +19,7 @@ SENTENCES_JSON_OUTPUT_DIR = BASE_DATA_PATH / "sentences_json"
 PROCESSED_SENTENCES_DIR = BASE_DATA_PATH / "processed_sentences_html"
 
 MAX_TOKENS_CHUNKING=512
-OVERLAP=20
+OVERLAP=0.2
 
 
 async def scrape_sentences_for_period(
@@ -43,8 +43,7 @@ async def scrape_sentences_for_period(
         return scraped_files
     except Exception as e:
         print(
-            f"[SENTENCES SCRAPING TASK] An error occurred during scraping for period {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}: {e}",
-            exc_info=True,
+            f"[SENTENCES SCRAPING TASK] An error occurred during scraping for period {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}: {e}"
         )
         return []
 
@@ -74,8 +73,7 @@ def process_single_sentence_html(
 
     except Exception as e:
         print(
-            f"[SENTENCES PROCESSING TASK] Error processing {html_file_path.name}: {e}",
-            exc_info=True,
+            f"[SENTENCES PROCESSING TASK] Error processing {html_file_path.name}: {e}"
         )
         return None
 
@@ -92,7 +90,27 @@ async def send_sentence_to_api(sentence_data: Dict[str, Any]) -> bool:
         f"[SENTENCES PROCESSING TASK] Attempting to send sentence {sentence_id} to API: {api_url}"
     )
 
-    payload = {"sentence": sentence_data}
+    # Formatear datos para Rails API
+    formatted_data = {
+        "number": sentence_data.get("number"),
+        "court": sentence_data.get("court"),
+        "importance": sentence_data.get("importance"),
+        "sentence_type": sentence_data.get("sentence_type"),
+        "date": sentence_data.get("date"),
+        "file_number": sentence_data.get("file_number"),
+        "procedure": sentence_data.get("procedure"),
+        "subjects": sentence_data.get("subjects", []),
+        "summary": sentence_data.get("summary"),
+        "text": sentence_data.get("text"),
+        "raw_text": sentence_data.get("raw_text"),
+        "signatories": sentence_data.get("signatories", []),
+        "discordants": sentence_data.get("discordants", []),
+        "editors": sentence_data.get("editors", []),
+        "descriptors": sentence_data.get("descriptors", []),
+        "short_embeddings_attributes": sentence_data.get("short_embeddings_attributes", []),
+        "long_embeddings_attributes": sentence_data.get("long_embeddings_attributes", [])
+    }
+    payload = {"sentence": formatted_data}
 
     try:
         response = requests.post(api_url, json=payload, headers=headers)
@@ -109,8 +127,7 @@ async def send_sentence_to_api(sentence_data: Dict[str, Any]) -> bool:
             return False
     except Exception as e:
         print(
-            f"[SENTENCES PROCESSING TASK] Unexpected error sending sentence {sentence_id} to API {api_url}: {e}",
-            exc_info=True,
+            f"[SENTENCES PROCESSING TASK] Unexpected error sending sentence {sentence_id} to API {api_url}: {e}"
         )
     return False
 
@@ -145,8 +162,8 @@ async def run_sentence_processing_job(
     )
 
     chunking_params_for_ingestor = {
-        "max_tokens": settings.MAX_TOKENS_CHUNKING,
-        "overlap": settings.OVERLAP,
+        "max_tokens": MAX_TOKENS_CHUNKING,
+        "overlap": OVERLAP,
     }
     sentence_ingestor_chunked = SentenceHTMLIngestor(
         chunking_params=chunking_params_for_ingestor, force_chunking=True
@@ -189,8 +206,7 @@ async def run_sentence_processing_job(
 
         except Exception as e:
             print(
-                f"[SENTENCES PROCESSING TASK] Unexpected error in processing loop for file '{html_file_path.name}': {e}",
-                exc_info=True,
+                f"[SENTENCES PROCESSING TASK] Unexpected error in processing loop for file '{html_file_path.name}': {e}"
             )
             failure_count += 1
 
