@@ -20,3 +20,6 @@ python load_normas.py --all-types --start-date 17/06/2025 --end-date 17/08/2025
 
 -->Solo archivos existentes (sin scraping):
 python load_normas.py --all-types --no-existing
+
+
+python load_normas_internacionales.py --start-date 01/01/2024 --end-date 31/12/2024 --norm-type international

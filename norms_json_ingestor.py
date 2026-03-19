@@ -95,10 +95,7 @@ class NormsJsonIngestor():
 
                 if not embedding_result.success():
                     error_details = embedding_result.errors()
-                    print(
-                        f"[NORMS INGESTOR] Embedding service failed for article in norm {transformed_data.get('norm_id')}: {error_details}"
-                    )
-                    continue
+                    raise RuntimeError(f"Embedding service failed: {error_details}")
 
                 ingested_texts = embedding_result["article"]
                 ingested_embeddings_nested = embedding_result["embeddings"]

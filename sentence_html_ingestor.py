@@ -42,18 +42,18 @@ class SentenceHTMLIngestor():
 
                 chunks_embedding_result = embedding_chunks_service.run()
 
-                if chunks_embedding_result.success():
-                    chunks = chunks_embedding_result.data.get("chunked_sentence", [])
-                    embeddings = chunks_embedding_result.data.get("embeddings", [])
-                    processed_data["short_embeddings_attributes"] = [
-                        {"chunk": chunk, "embedding_type": "short", "vector": vector}
-                        for chunk, vector in zip(chunks, embeddings)
-                    ]
-                else:
+                if not chunks_embedding_result.success():
                     print(
-                        f"[INGESTOR] Error al generar embeddings cortos para {file.name}: {chunks_embedding_result.errors()}"
+                        f"[INGESTOR] Error crítico al generar embeddings cortos para {file.name}: {chunks_embedding_result.errors()}"
                     )
-                    processed_data["short_embeddings_attributes"] = []
+                    return None
+
+                chunks = chunks_embedding_result.data.get("chunked_sentence", [])
+                embeddings = chunks_embedding_result.data.get("embeddings", [])
+                processed_data["short_embeddings_attributes"] = [
+                    {"chunk": chunk, "embedding_type": "short", "vector": vector}
+                    for chunk, vector in zip(chunks, embeddings)
+                ]
 
                 full_embedding_service = TextIngestorService(
                     text=main_text,
@@ -63,18 +63,18 @@ class SentenceHTMLIngestor():
                 )
                 full_result = full_embedding_service.run()
 
-                if full_result.success():
-                    full_text_chunk = [main_text]
-                    full_text_embeddings = full_result.data.get("embeddings", [])
-                    processed_data["long_embeddings_attributes"] = [
-                        {"chunk": chunk, "embedding_type": "long", "vector": vector}
-                        for chunk, vector in zip(full_text_chunk, full_text_embeddings)
-                    ]
-                else:
+                if not full_result.success():
                     print(
-                        f"[INGESTOR] Error al generar embeddings largos para {file.name}: {full_result.errors()}"
+                        f"[INGESTOR] Error crítico al generar embeddings largos para {file.name}: {full_result.errors()}"
                     )
-                    processed_data["long_embeddings_attributes"] = []
+                    return None
+
+                full_text_chunk = [main_text]
+                full_text_embeddings = full_result.data.get("embeddings", [])
+                processed_data["long_embeddings_attributes"] = [
+                    {"chunk": chunk, "embedding_type": "long", "vector": vector}
+                    for chunk, vector in zip(full_text_chunk, full_text_embeddings)
+                ]
 
                 print(
                     f"[INGESTOR] Embeddings procesados para {file.name}"

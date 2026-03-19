@@ -24,7 +24,8 @@ from norms_json_ingestor import NormsJsonIngestor
 from url_manager import remove_processed_urls_from_file, track_successful_url
 
 # Configuración
-API_URL = "http://api.lvh.me:3000/v1/norms"
+# API_URL = "http://api.lvh.me:3000/v1/norms"
+API_URL = "https://lexia.uy/v1/norms"
 BASE_DATA_PATH = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
 NORMS_JSON_DIR = BASE_DATA_PATH / "norms" / "json"
 PROCESSED_JSON_DIR = BASE_DATA_PATH / "norms" / "processed_json"
@@ -32,15 +33,17 @@ NORMS_LINKS_FILE = BASE_DATA_PATH / "norms_links.txt"
 
 
 SCRAPER_TASK_CONFIG = {
-    "code": 8,
-    "law": 5,
-    "decree": 6
+    # "code": 8,
+     "law": 5,
+    # "decree": 6,
+    #"dgi": 15
 }
 
 API_NORMTYPE_IDS_RAILS = {
     "law": 2,
-    "decree": 3,
-    "code": 1,
+    # "decree": 3,
+    # "code": 1,
+    #"dgi": 5
 }
 
 def format_norm_for_rails(norm_data: Dict[str, Any]) -> Dict[str, Any]:

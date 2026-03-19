@@ -64,13 +64,13 @@ async def scrape_norms(start_date: datetime, end_date: datetime, type: int):
                 prev_count = curr_count
 
                 await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(10000)
+                await page.wait_for_timeout(30000)
             rows = await page.query_selector_all(".table.table-hover tbody > tr")
             for row in rows:
                 impo_link_cell = await row.query_selector("td:nth-child(2) > a")
                 impo_link_cell_text = await impo_link_cell.inner_text()
 
-                if "Documento actualizado" in impo_link_cell_text:
+                if "Documento actualizado" in impo_link_cell_text :
                     impo_link = await impo_link_cell.get_attribute("href")
 
                     if impo_link:
@@ -81,7 +81,7 @@ async def scrape_norms(start_date: datetime, end_date: datetime, type: int):
                         print(
                             f"[IMPO SCRAPER] No link found for norm {norm_count}"
                         )
-
+            
             print(f"[IMPO SCRAPER] Total norms scraped: {norm_count}")
 
             await context.close()
