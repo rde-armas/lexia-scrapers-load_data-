@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,7 +10,8 @@ import requests
 from scraper import sentences_scraper
 from sentence_html_ingestor import SentenceHTMLIngestor
 
-API_URL = "https://lexia.uy/v1/sentences"
+#API_URL = "https://lexia.uy/v1/sentences"
+API_URL = "http://localhost:3000/v1/sentences"
 
 BASE_DATA_PATH = Path(
     os.getenv("LEXIA_BRAIN_DATA_PATH", Path(__file__).resolve().parent.parent / "data")
@@ -93,7 +95,7 @@ async def send_sentence_to_api(sentence_data: Dict[str, Any]) -> bool:
     # Formatear datos para Rails API
     formatted_data = {
         "number": sentence_data.get("number"),
-        "court": sentence_data.get("court"),
+        "court_name": sentence_data.get("court"),
         "importance": sentence_data.get("importance"),
         "sentence_type": sentence_data.get("sentence_type"),
         "date": sentence_data.get("date"),
@@ -103,12 +105,20 @@ async def send_sentence_to_api(sentence_data: Dict[str, Any]) -> bool:
         "summary": sentence_data.get("summary"),
         "text": sentence_data.get("text"),
         "raw_text": sentence_data.get("raw_text"),
-        "signatories": sentence_data.get("signatories", []),
-        "discordants": sentence_data.get("discordants", []),
-        "editors": sentence_data.get("editors", []),
+        "judges": sentence_data.get("judges", []),
+        "parties": sentence_data.get("parties", []),
+        "compliance_data": sentence_data.get("compliance_data", {}),
+        "legal_basis": sentence_data.get("legal_basis", []),
+        "country_code": sentence_data.get("country_code"),
+        "jurisdiction": sentence_data.get("jurisdiction"),
+        "legal_effects": sentence_data.get("legal_effects"),
+        "instance": sentence_data.get("instance"),
+        "outcome": sentence_data.get("outcome"),
+        "parent_id": sentence_data.get("parent_id"),
+        "country": "UY",
+        "court": sentence_data.get("court"),
         "descriptors": sentence_data.get("descriptors", []),
-        "short_embeddings_attributes": sentence_data.get("short_embeddings_attributes", []),
-        "long_embeddings_attributes": sentence_data.get("long_embeddings_attributes", [])
+        "precomputed_vectors": sentence_data.get("precomputed_vectors", [])
     }
     payload = {"sentence": formatted_data}
 
@@ -183,14 +193,14 @@ async def run_sentence_processing_job(
 
                 if api_send_success:
                     try:
-                        html_file_path.unlink()
+                        shutil.move(str(html_file_path), str(PROCESSED_SENTENCES_DIR / html_file_path.name))
                         print(
-                            f"[SENTENCES PROCESSING TASK] Successfully processed, JSON saved, HTML file '{html_file_path.name}' deleted, and data sent to API."
+                            f"[SENTENCES PROCESSING TASK] Successfully processed, JSON saved, HTML file '{html_file_path.name}' moved to processed folder, and data sent to API."
                         )
                         success_count += 1
-                    except OSError as e_unlink:
+                    except OSError as e_move:
                         print(
-                            f"[SENTENCES PROCESSING TASK] Data for '{html_file_path.name}' sent to API, but FAILED TO DELETE local HTML file: {e_unlink}. File remains in source directory."
+                            f"[SENTENCES PROCESSING TASK] Data for '{html_file_path.name}' sent to API, but FAILED TO MOVE local HTML file: {e_move}. File remains in source directory."
                         )
                         failure_count += 1
                 else:

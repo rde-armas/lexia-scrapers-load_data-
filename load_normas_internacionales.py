@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import requests
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -16,23 +17,30 @@ API_URL = "http://api.lvh.me:3000/v1/norms"
 BASE_DATA_PATH = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
 NORMS_HTML_DIR = BASE_DATA_PATH / "norms" / "html" / "international"
 PROCESSED_JSON_DIR = BASE_DATA_PATH / "norms" / "processed_json"
+PROCESSED_HTML_DIR = BASE_DATA_PATH / "norms" / "processed_html" / "international"
 NORMS_LINKS_FILE = BASE_DATA_PATH / "norms_links.txt"
 
 def format_norm_for_rails(norm_data: Dict[str, Any]) -> Dict[str, Any]:
     """Formatea los datos de norma para Rails."""
     articles_attributes = []
-    if "articles" in norm_data:
-        for article in norm_data["articles"]:
+    if "processed_articles" in norm_data:
+        for article in norm_data["processed_articles"]:
             articles_attributes.append({
                 "number": article.get("number", 0),
                 "title": article.get("title", ""),
-                "content": article.get("content", ""),
-                "embedding": article.get("embedding", [])
+                "text": article.get("text", ""),
+                "precomputed_vectors": [
+                    {
+                        "chunk": article.get("text", ""),
+                        "dense_vector": article.get("embedding", [])
+                    }
+                ] if article.get("embedding") else []
             })
     
     rails_data = {
+        "country": norm_data.get("country", "INT"),
         "norm_id": norm_data.get("norm_id", 0),
-        "norm_type": 10,  # ID numérico para Rails (international)
+        "norm_type": 4,  # ID numérico para Rails (international)
         "number": norm_data.get("number", 0),
         "year": norm_data.get("year", 0),
         "title": norm_data.get("title", ""),
@@ -200,6 +208,10 @@ async def load_norms_for_period(
     # Crear directorios necesarios
     NORMS_HTML_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_JSON_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_HTML_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Set country in norm_data later
+    country = getattr(load_norms_for_period, "country", "INT")
     
     # Obtener URLs del scraper
     if start_date and end_date:
@@ -247,6 +259,9 @@ async def load_norms_for_period(
                 json_filename = f"norm_{url_hash}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                 json_path = PROCESSED_JSON_DIR / json_filename
                 
+                # Add country
+                norm_data["country"] = getattr(load_norms_for_period, "country", "INT")
+                
                 with open(json_path, 'w', encoding='utf-8') as f:
                     json.dump(norm_data, f, ensure_ascii=False, indent=2, default=str)
                 print(f"💾 JSON guardado: {json_filename}")
@@ -268,10 +283,10 @@ async def load_norms_for_period(
                     print(f"✅ Norma enviada exitosamente al API")
                     successful += 1
                     
-                    # Solo eliminar HTML si el envío al API fue exitoso
+                    # Mover archivo HTML a la carpeta de procesados
                     if html_file_path and html_file_path.exists():
-                        html_file_path.unlink()
-                        print(f"🗑️ HTML eliminado tras envío exitoso: {html_file_path.name}")
+                        shutil.move(str(html_file_path), str(PROCESSED_HTML_DIR / html_file_path.name))
+                        print(f"✓ HTML movido a procesados: {html_file_path.name}")
                 else:
                     print(f"✗ Error enviando norma (JSON guardado para reintento)")
                     failed += 1
@@ -303,6 +318,7 @@ def main():
     parser.add_argument("--end-date", help="Fecha de fin (DD/MM/YYYY)")
     parser.add_argument("--norm-type", default="international", help="Tipo de norma (siempre international)")
     parser.add_argument("--limit", type=int, help="Límite de URLs a procesar")
+    parser.add_argument("--country", default="INT", help="País de la norma (ej: INT, UY)")
     
     args = parser.parse_args()
     
@@ -319,6 +335,9 @@ def main():
     elif args.start_date or args.end_date:
         print("✗ Debe proporcionar ambas fechas: --start-date y --end-date")
         return
+    
+    # Store country in the function object
+    load_norms_for_period.country = args.country
     
     # Ejecutar el procesamiento
     asyncio.run(load_norms_for_period(

@@ -24,26 +24,26 @@ from norms_json_ingestor import NormsJsonIngestor
 from url_manager import remove_processed_urls_from_file, track_successful_url
 
 # Configuración
-# API_URL = "http://api.lvh.me:3000/v1/norms"
-API_URL = "https://lexia.uy/v1/norms"
+API_URL = "http://api.lvh.me:3000/v1/norms"
+#API_URL = "https://lexia.uy/v1/norms"
 BASE_DATA_PATH = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
-NORMS_JSON_DIR = BASE_DATA_PATH / "norms" / "json"
-PROCESSED_JSON_DIR = BASE_DATA_PATH / "norms" / "processed_json"
-NORMS_LINKS_FILE = BASE_DATA_PATH / "norms_links.txt"
-
 
 SCRAPER_TASK_CONFIG = {
-    # "code": 8,
-     "law": 5,
-    # "decree": 6,
-    #"dgi": 15
+    "constitution": 4,
+    "law": 5,
+    "decree": 6,
+    "resolution": 7,
+    "code": 8,
+    "dgi": 15
 }
 
 API_NORMTYPE_IDS_RAILS = {
+    "constitution": 0,
+    "code": 1,
     "law": 2,
-    # "decree": 3,
-    # "code": 1,
-    #"dgi": 5
+    "decree": 3,
+    "dgi": 5,
+    "resolution": 6
 }
 
 def format_norm_for_rails(norm_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,11 +60,12 @@ def format_norm_for_rails(norm_data: Dict[str, Any]) -> Dict[str, Any]:
                 "signers": article.get("signers", ""),
                 "text": article.get("text", ""),
                 "references_url": article.get("references_url", ""),
-                "impo_url": article.get("impo_url", ""),
-                "long_embeddings_attributes": article.get("long_embeddings_attributes", [])
+                "source_url": article.get("impo_url", ""),
+                "precomputed_vectors": article.get("precomputed_vectors", [])
             })
     
     formatted_data = {
+        "country": norm_data.get("country", "UY"),
         "norm_id": norm_data.get("norm_id"),
         "norm_type": norm_data.get("norm_type"),
         "number": norm_data.get("number"),
@@ -74,7 +75,7 @@ def format_norm_for_rails(norm_data: Dict[str, Any]) -> Dict[str, Any]:
         "references": norm_data.get("references", ""),
         "signers": norm_data.get("signers", ""),
         "references_url": norm_data.get("references_url", ""),
-        "impo_url": norm_data.get("impo_url", ""),
+        "source_url": norm_data.get("source_url", norm_data.get("impo_url", "")),
         "newspaper_image_url": norm_data.get("newspaper_image_url", ""),
         "promulgated_at": norm_data.get("promulgated_at"),
         "published_at": norm_data.get("published_at"),
@@ -109,7 +110,8 @@ async def scrape_norms_for_period(
     start_date: datetime, 
     end_date: datetime, 
     norm_type: str,
-    output_dir: Path
+    output_dir: Path,
+    links_file: Path
 ) -> List[str]:
     """
     Scraping de normas para un período específico.
@@ -128,16 +130,16 @@ async def scrape_norms_for_period(
             return []
         
         # Limpiar archivo de links existente
-        if NORMS_LINKS_FILE.exists():
-            NORMS_LINKS_FILE.unlink()
+        if links_file.exists():
+            links_file.unlink()
         
         # Ejecutar scraper
-        await impo_scraper.scrape_norms(start_date, end_date, scraper_id)
+        await impo_scraper.scrape_norms(start_date, end_date, scraper_id, norm_type)
         
         # Leer URLs scrapeadas
         urls = []
-        if NORMS_LINKS_FILE.exists():
-            with open(NORMS_LINKS_FILE, 'r', encoding='utf-8') as f:
+        if links_file.exists():
+            with open(links_file, 'r', encoding='utf-8') as f:
                 urls = [line.strip() for line in f if line.strip()]
         
         print(f"✓ Scraping completado. Encontradas {len(urls)} URLs")
@@ -164,7 +166,7 @@ def process_existing_json_files(json_dir: Path) -> List[Path]:
     print(f"Encontrados {len(json_files)} archivos JSON existentes")
     return json_files
 
-async def fetch_and_process_norm_from_url(url: str, ingestor: NormsJsonIngestor) -> Optional[Dict[str, Any]]:
+async def fetch_and_process_norm_from_url(url: str, ingestor: NormsJsonIngestor, json_dir: Path) -> Optional[Dict[str, Any]]:
     """Obtiene JSON de una URL y lo procesa."""
     try:
         # Convertir URL a formato JSON si es necesario
@@ -176,7 +178,7 @@ async def fetch_and_process_norm_from_url(url: str, ingestor: NormsJsonIngestor)
         
         norm_json_content = response.json()
         
-        temp_json_path = NORMS_JSON_DIR / f"temp_{datetime.now().timestamp()}.json"
+        temp_json_path = json_dir / f"temp_{datetime.now().timestamp()}.json"
         temp_json_path.parent.mkdir(parents=True, exist_ok=True)
         
         with open(temp_json_path, "w", encoding="utf-8") as f:
@@ -202,29 +204,36 @@ async def load_norms_for_period(
     """
     Función principal para cargar normas al servidor Rails.
     """
+    norms_json_dir = BASE_DATA_PATH / "norms" / norm_type / "json"
+    processed_json_dir = BASE_DATA_PATH / "norms" / norm_type / "processed_json"
+    norms_links_file = BASE_DATA_PATH / "norms" / norm_type / "norms_links.txt"
+    
     print(f"🚀 Iniciando carga de normas al servidor Rails")
     print(f"API: {API_URL}")
-    print(f"Directorio JSON: {NORMS_JSON_DIR}")
+    print(f"Directorio JSON: {norms_json_dir}")
     print(f"Tipo de norma: {norm_type}")
     
     # Crear directorios necesarios
-    NORMS_JSON_DIR.mkdir(parents=True, exist_ok=True)
-    PROCESSED_JSON_DIR.mkdir(parents=True, exist_ok=True)
+    norms_json_dir.mkdir(parents=True, exist_ok=True)
+    processed_json_dir.mkdir(parents=True, exist_ok=True)
     
     ingestor = NormsJsonIngestor()
+    
+    # Add country to transformed data
+    country = getattr(load_norms_for_period, "country", "UY")
     
     urls_to_process = []
     json_files_to_process = []
     
     if start_date and end_date:
         scraped_urls = await scrape_norms_for_period(
-            start_date, end_date, norm_type, NORMS_JSON_DIR
+            start_date, end_date, norm_type, norms_json_dir, norms_links_file
         )
         urls_to_process.extend(scraped_urls)
     
     # Procesar archivos JSON existentes si se solicita
     if process_existing:
-        existing_files = process_existing_json_files(NORMS_JSON_DIR)
+        existing_files = process_existing_json_files(norms_json_dir)
         json_files_to_process.extend(existing_files)
     
     if not urls_to_process and not json_files_to_process:
@@ -245,7 +254,7 @@ async def load_norms_for_period(
         
         try:
             # Obtener y procesar JSON de la URL
-            norm_data = await fetch_and_process_norm_from_url(url, ingestor)
+            norm_data = await fetch_and_process_norm_from_url(url, ingestor, norms_json_dir)
             
             if not norm_data:
                 print(f"✗ No se pudo procesar URL: {url}")
@@ -255,10 +264,11 @@ async def load_norms_for_period(
             try:
                 url_hash = hash(url) % 1000000
                 json_filename = f"norm_{url_hash}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                json_path = PROCESSED_JSON_DIR / json_filename
+                json_path = processed_json_dir / json_filename
                 
                 # Asignar tipo de norma para Rails antes de guardar
                 norm_data["norm_type"] = API_NORMTYPE_IDS_RAILS.get(norm_type)
+                norm_data["country"] = getattr(load_norms_for_period, "country", "UY")
                 norm_data["source_url"] = url  # Agregar URL fuente para referencia
                 
                 with open(json_path, 'w', encoding='utf-8') as f:
@@ -306,11 +316,12 @@ async def load_norms_for_period(
             
             try:
                 norm_data["norm_type"] = API_NORMTYPE_IDS_RAILS.get(norm_type)
+                norm_data["country"] = getattr(load_norms_for_period, "country", "UY")
                 norm_data["source_file"] = json_file.name
                 
                 # Guardar datos procesados como JSON
                 json_filename = json_file.stem + "_processed.json"
-                json_path = PROCESSED_JSON_DIR / json_filename
+                json_path = processed_json_dir / json_filename
                 with open(json_path, 'w', encoding='utf-8') as f:
                     json.dump(norm_data, f, ensure_ascii=False, indent=2, default=str)
                 print(f"💾 JSON guardado: {json_filename}")
@@ -359,7 +370,7 @@ async def load_norms_for_period(
     
     # Eliminar URLs procesadas exitosamente del archivo de links
     if processed_urls and start_date and end_date:  # Solo si se hizo scraping
-        remove_processed_urls_from_file(processed_urls, NORMS_LINKS_FILE)
+        remove_processed_urls_from_file(processed_urls, norms_links_file)
 
 def main():
     parser = argparse.ArgumentParser(description="Cargar normas al servidor Rails")
@@ -372,6 +383,7 @@ def main():
                        help="Procesar todos los tipos de normas (code, law, decree)")
     parser.add_argument("--no-existing", action="store_true", 
                        help="No procesar archivos JSON existentes")
+    parser.add_argument("--country", default="UY", help="País de la norma (ej: UY, CL)")
     
     args = parser.parse_args()
     
@@ -397,6 +409,9 @@ def main():
         print(f"🔄 Procesando todos los tipos de normas: {', '.join(norm_types_to_process)}")
     else:
         norm_types_to_process = [args.norm_type]
+    
+    # Store country in the function object for easy access
+    load_norms_for_period.country = args.country
     
     # Función async para procesar todos los tipos
     async def process_all_types():

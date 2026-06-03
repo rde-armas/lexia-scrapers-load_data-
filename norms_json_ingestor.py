@@ -79,6 +79,7 @@ class NormsJsonIngestor():
             )
             return []
 
+        norm_title = transformed_data.get("title", "")
         for art in articles:
             article_text = art.get("textoArticulo", "")
             if not article_text:
@@ -140,14 +141,13 @@ class NormsJsonIngestor():
                 "notes": art.get("notasArticulo", "").strip(),
                 "references": art.get("secArticulo", "").strip(),
                 "signers": transformed_data["signers"],
-                "text": ingested_text,
+                "text": article_text,
                 "references_url": art.get("urlArticulo", "").strip(),
                 "impo_url": art.get("urlArticulo", "").strip(),
-                "long_embeddings_attributes": [
+                "precomputed_vectors": [
                     {
-                        "vector": ingested_embeddings,
-                        "chunk": ingested_text,
-                        "embedding_type": 1,
+                        "dense_vector": ingested_embeddings,
+                        "chunk": article_text,
                     }
                 ],
             }

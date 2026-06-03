@@ -2,7 +2,12 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import httpx
 import asyncio
+import os
+from dotenv import load_dotenv
 from services.base import Service, Result
+
+# Load environment variables
+load_dotenv()
 
 # Constants
 MAX_TOKENS_MODEL: int = 8192
@@ -10,65 +15,69 @@ MAX_TOKENS_CHUNKING: int = 512
 OVERLAP: float = 0.2
 CHARS_PER_TOKEN: float = 2.5
 
-CLOUDFLARE_ACCOUNT_ID = "a727a535482026679022fc2a26fa4594"
-CLOUDFLARE_AUTH_TOKEN = "touHjZEAC0yMKXEXBHl0h-7qinqHrkngkQdsrgOl"
+NOVITA_TOKEN = os.getenv("NOVITA")
 
 class EmbeddingProvider:
     @staticmethod
     async def fetch_async(texts: list[str]) -> list[list[float]]:
-        """Fetch embeddings from Cloudflare Workers AI via OpenAI compatible endpoint."""
-        print(f"[EMBEDDING_PROVIDER] Fetching embeddings for {len(texts)} texts via Cloudflare OpenAI-compatible API")
+        """Fetch embeddings from Novita AI via OpenAI compatible endpoint with batching."""
+        print(f"[EMBEDDING_PROVIDER] Fetching embeddings for {len(texts)} texts via Novita OpenAI-compatible API")
         
-        if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AUTH_TOKEN:
-            print("[EMBEDDING_PROVIDER] Cloudflare credentials missing")
-            raise ValueError("Cloudflare credentials missing")
+        if not NOVITA_TOKEN:
+            print("[EMBEDDING_PROVIDER] Novita API token (NOVITA) missing")
+            raise ValueError("Novita API token (NOVITA) missing")
 
-        # OpenAI compatible endpoint for Cloudflare Workers AI
-        url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/embeddings"
+        # OpenAI compatible endpoint for Novita AI
+        url = "https://api.novita.ai/openai/v1/embeddings"
         headers = {
-            "Authorization": f"Bearer {CLOUDFLARE_AUTH_TOKEN}",
+            "Authorization": f"Bearer {NOVITA_TOKEN}",
             "Content-Type": "application/json"
         }
         
+        BATCH_SIZE = 20
+        all_embeddings = []
+        
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    url,
-                    headers=headers,
-                    json={
-                        "model": "@cf/baai/bge-m3",
-                        "input": texts
-                    },
-                    timeout=60.0
-                )
-                response.raise_for_status()
-                data = response.json()
+            for i in range(0, len(texts), BATCH_SIZE):
+                batch = texts[i:i+BATCH_SIZE]
+                print(f"[EMBEDDING_PROVIDER] Fetching batch {i//BATCH_SIZE + 1} of {(len(texts) + BATCH_SIZE - 1)//BATCH_SIZE} ({len(batch)} items)...")
                 
-                # OpenAI format: {"data": [{"embedding": [...], "index": 0}, ...]}
-                embeddings_data = data.get("data", [])
-                
-                # If "data" is not at root, it might be in "result" (direct Workers AI API)
-                if not embeddings_data and "result" in data:
-                    embeddings_data = data.get("result", {}).get("data", [])
-                
-                # Ensure they are sorted by index if present
-                if embeddings_data and isinstance(embeddings_data[0], dict) and "index" in embeddings_data[0]:
-                    embeddings_data.sort(key=lambda x: x.get("index", 0))
-                
-                # Extract embeddings. Handle both [{"embedding": [...]}, ...] and [[...], ...] formats
-                if embeddings_data and isinstance(embeddings_data[0], dict):
-                    embeddings = [item["embedding"] for item in embeddings_data]
-                else:
-                    embeddings = embeddings_data
-                
-                if not embeddings:
-                    print(f"[EMBEDDING_PROVIDER] No embeddings returned in response: {data}")
-                    raise ValueError("No embeddings returned from Cloudflare")
-
-                return embeddings
-            except Exception as e:
-                print(f"[EMBEDDING_PROVIDER] Error fetching Cloudflare embeddings: {e}")
-                raise
+                try:
+                    response = await client.post(
+                        url,
+                        headers=headers,
+                        json={
+                            "model": "baai/bge-m3",
+                            "input": batch
+                        },
+                        timeout=60.0
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # OpenAI format: {"data": [{"embedding": [...], "index": 0}, ...]}
+                    embeddings_data = data.get("data", [])
+                    
+                    # Ensure they are sorted by index if present
+                    if embeddings_data and isinstance(embeddings_data[0], dict) and "index" in embeddings_data[0]:
+                        embeddings_data.sort(key=lambda x: x.get("index", 0))
+                    
+                    # Extract embeddings. Handle both [{"embedding": [...]}, ...] and [[...], ...] formats
+                    if embeddings_data and isinstance(embeddings_data[0], dict):
+                        batch_embeddings = [item["embedding"] for item in embeddings_data]
+                    else:
+                        batch_embeddings = embeddings_data
+                    
+                    if not batch_embeddings:
+                        print(f"[EMBEDDING_PROVIDER] No embeddings returned in response for batch: {data}")
+                        raise ValueError("No embeddings returned from Novita AI")
+                    
+                    all_embeddings.extend(batch_embeddings)
+                except Exception as e:
+                    print(f"[EMBEDDING_PROVIDER] Error fetching Novita AI embeddings: {e}")
+                    raise
+                    
+        return all_embeddings
 
     @staticmethod
     def fetch(texts: list[str]) -> list[list[float]]:
@@ -124,7 +133,7 @@ class EmbeddingService(Service):
             
             print(f"[EMBEDDING] Successfully generated {len(embeddings)} embeddings for {len(self.documents)} documents")
         except Exception as e:
-            error_msg = f"Error generating embeddings via Cloudflare: {e}"
+            error_msg = f"Error generating embeddings via Novita: {e}"
             print(f"[EMBEDDING] {error_msg}")
             self.result.add_error(error_msg)
 
@@ -143,7 +152,7 @@ class EmbeddingService(Service):
                 self.result["embeddings"] = embeddings
             return self.result
         except Exception as e:
-            error_msg = f"Error generating embeddings via Cloudflare (async): {e}"
+            error_msg = f"Error generating embeddings via Novita (async): {e}"
             print(f"[EMBEDDING] {error_msg}")
             self.result.add_error(error_msg)
             return self.result

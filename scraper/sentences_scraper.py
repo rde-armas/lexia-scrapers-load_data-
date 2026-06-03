@@ -30,8 +30,9 @@ def generate_filename(sentence_date, sentence_number, sentence_court, sentence_t
 
 
 async def scrape_sentences(
-    session_start_date, session_end_date, output_dir: Path, retry_count=0
+    session_start_date, session_end_date, output_dir: Path, retry_count=0, current_start_date=None
 ):
+    start_date = current_start_date if current_start_date is not None else session_start_date
     try:
 
         await asyncio.sleep(random.uniform(10, 30))
@@ -40,8 +41,6 @@ async def scrape_sentences(
             task_firm = f"[{session_start_date.strftime('%d/%m/%Y')} - {session_end_date.strftime('%d/%m/%Y')}]"
 
             browser = await p.chromium.launch(headless=True, slow_mo=100)
-
-            start_date = session_start_date
 
             while start_date < session_end_date:
                 end_date = min(start_date + timedelta(days=6), session_end_date)
@@ -321,13 +320,13 @@ async def scrape_sentences(
 
         if retry_count < MAX_RETRIES:
             print(
-                f"[SENTENCES SCRAPING] {task_firm} Retrying period from {session_start_date.strftime('%d/%m/%Y')} to {session_end_date.strftime('%d/%m/%Y')}. Attempt {retry_count + 1}."
+                f"[SENTENCES SCRAPING] {task_firm} Retrying period from {start_date.strftime('%d/%m/%Y')} to {session_end_date.strftime('%d/%m/%Y')}. Attempt {retry_count + 1}."
             )
 
             await scrape_sentences(
-                session_start_date, session_end_date, output_dir, retry_count + 1
+                session_start_date, session_end_date, output_dir, retry_count + 1, current_start_date=start_date
             )
         else:
             print(
-                f"[SENTENCES SCRAPING] {task_firm} Max retries reached for period from {session_start_date.strftime('%d/%m/%Y')} to {session_end_date.strftime('%d/%m/%Y')}. Moving to next period."
+                f"[SENTENCES SCRAPING] {task_firm} Max retries reached for period from {start_date.strftime('%d/%m/%Y')} to {session_end_date.strftime('%d/%m/%Y')}. Moving to next period."
             )

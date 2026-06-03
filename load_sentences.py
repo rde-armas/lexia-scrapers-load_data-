@@ -12,14 +12,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import requests
+import shutil
 
 from sentence_html_ingestor import SentenceHTMLIngestor
 
 # Configuración
-API_URL = "https://lexia.uy/v1/sentences"
+#API_URL = "https://lexia.uy/v1/sentences"
+API_URL = "http://localhost:3000/v1/sentences"
 BASE_DATA_PATH = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
 SENTENCES_HTML_DIR = BASE_DATA_PATH / "sentences" / "html"
 PROCESSED_JSON_DIR = BASE_DATA_PATH / "sentences" / "json"
+PROCESSED_HTML_DIR = BASE_DATA_PATH / "sentences" / "processed_html"
 
 # Configuración de chunking (compatible con sentence_processor.py)
 MAX_TOKENS_CHUNKING = 512
@@ -29,7 +32,7 @@ def format_sentence_for_rails(sentence_data: Dict[str, Any]) -> Dict[str, Any]:
     """Formatea los datos para Rails."""
     return {
         "number": sentence_data.get("number"),
-        "court": sentence_data.get("court"),
+        "court_name": sentence_data.get("court"),
         "importance": sentence_data.get("importance"),
         "sentence_type": sentence_data.get("sentence_type"),
         "date": sentence_data.get("date"),
@@ -39,12 +42,20 @@ def format_sentence_for_rails(sentence_data: Dict[str, Any]) -> Dict[str, Any]:
         "summary": sentence_data.get("summary"),
         "text": sentence_data.get("text"),
         "raw_text": sentence_data.get("raw_text"),
-        "signatories": sentence_data.get("signatories", []),
-        "discordants": sentence_data.get("discordants", []),
-        "editors": sentence_data.get("editors", []),
+        "judges": sentence_data.get("judges", []),
+        "parties": sentence_data.get("parties", []),
+        "compliance_data": sentence_data.get("compliance_data", {}),
+        "legal_basis": sentence_data.get("legal_basis", []),
+        "country_code": sentence_data.get("country_code"),
+        "jurisdiction": sentence_data.get("jurisdiction"),
+        "legal_effects": sentence_data.get("legal_effects"),
+        "instance": sentence_data.get("instance"),
+        "outcome": sentence_data.get("outcome"),
+        "parent_id": sentence_data.get("parent_id"),
+        "country": "UY",
+        "court": sentence_data.get("court"),
         "descriptors": sentence_data.get("descriptors", []),
-        "short_embeddings_attributes": sentence_data.get("short_embeddings_attributes", []),
-        "long_embeddings_attributes": sentence_data.get("long_embeddings_attributes", [])
+        "precomputed_vectors": sentence_data.get("precomputed_vectors", [])
     }
 
 def send_sentence(sentence_data: Dict[str, Any]) -> bool:
@@ -117,7 +128,8 @@ def process_existing_files(html_dir: Path) -> List[Path]:
 async def load_sentences_for_period(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    process_existing: bool = True
+    process_existing: bool = True,
+    limit: Optional[int] = None
 ):
     """
     Carga sentencias para un período específico o procesa archivos existentes.
@@ -126,6 +138,7 @@ async def load_sentences_for_period(
         start_date: Fecha de inicio para scraping (opcional)
         end_date: Fecha de fin para scraping (opcional)
         process_existing: Si procesar archivos existentes en el directorio
+        limit: Límite de archivos a procesar
     """
     print("🚀 Iniciando carga de sentencias al servidor Rails")
     print(f"API: {API_URL}")
@@ -134,6 +147,7 @@ async def load_sentences_for_period(
     # Crear directorios necesarios
     SENTENCES_HTML_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_JSON_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_HTML_DIR.mkdir(parents=True, exist_ok=True)
     
     # Crear ingestor CON embeddings
     ingestor = SentenceHTMLIngestor(
@@ -164,6 +178,12 @@ async def load_sentences_for_period(
     
     # Eliminar duplicados manteniendo el orden
     html_files = list(dict.fromkeys(html_files))
+    
+    # Aplicar límite si se especifica
+    if limit is not None:
+        print(f"Aplicando límite de procesamiento: {limit} archivos de {len(html_files)} total")
+        html_files = html_files[:limit]
+        
     print(f"Total de archivos a procesar: {len(html_files)}")
     
     # Procesar archivos
@@ -200,9 +220,9 @@ async def load_sentences_for_period(
                         json.dump(sentence_data, f, ensure_ascii=False, indent=2, default=str)
                     print(f"✓ JSON guardado: {json_filename}")
                     
-                    # Eliminar archivo HTML original
-                    html_file.unlink()
-                    print(f"✓ HTML eliminado: {html_file.name}")
+                    # Mover archivo HTML a la carpeta de procesados
+                    shutil.move(str(html_file), str(PROCESSED_HTML_DIR / html_file.name))
+                    print(f"✓ HTML movido a procesados: {html_file.name}")
                 except Exception as e:
                     print(f"⚠ Error al guardar JSON o eliminar HTML: {e}")
             else:
@@ -243,6 +263,11 @@ def main():
         action="store_true", 
         help="No procesar archivos existentes, solo hacer scraping"
     )
+    parser.add_argument(
+        "--limit", 
+        type=int, 
+        help="Límite de archivos a procesar"
+    )
     
     args = parser.parse_args()
     
@@ -280,7 +305,8 @@ def main():
         asyncio.run(load_sentences_for_period(
             start_date=start_date,
             end_date=end_date,
-            process_existing=process_existing
+            process_existing=process_existing,
+            limit=args.limit
         ))
     except KeyboardInterrupt:
         print("\n⚠ Interrumpido por el usuario")

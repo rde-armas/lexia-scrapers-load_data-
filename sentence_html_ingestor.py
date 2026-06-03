@@ -50,10 +50,15 @@ class SentenceHTMLIngestor():
 
                 chunks = chunks_embedding_result.data.get("chunked_sentence", [])
                 embeddings = chunks_embedding_result.data.get("embeddings", [])
-                processed_data["short_embeddings_attributes"] = [
-                    {"chunk": chunk, "embedding_type": "short", "vector": vector}
-                    for chunk, vector in zip(chunks, embeddings)
-                ]
+                
+                precomputed_vectors = []
+                
+                for chunk, vector in zip(chunks, embeddings):
+                    vec_item = {
+                        "chunk": chunk,
+                        "dense_vector": vector
+                    }
+                    precomputed_vectors.append(vec_item)
 
                 full_embedding_service = TextIngestorService(
                     text=main_text,
@@ -71,20 +76,24 @@ class SentenceHTMLIngestor():
 
                 full_text_chunk = [main_text]
                 full_text_embeddings = full_result.data.get("embeddings", [])
-                processed_data["long_embeddings_attributes"] = [
-                    {"chunk": chunk, "embedding_type": "long", "vector": vector}
-                    for chunk, vector in zip(full_text_chunk, full_text_embeddings)
-                ]
+                
+                for chunk, vector in zip(full_text_chunk, full_text_embeddings):
+                    vec_item = {
+                        "chunk": chunk,
+                        "dense_vector": vector
+                    }
+                    precomputed_vectors.append(vec_item)
+
+                processed_data["precomputed_vectors"] = precomputed_vectors
 
                 print(
-                    f"[INGESTOR] Embeddings procesados para {file.name}"
+                    f"[INGESTOR] Embeddings (dense) procesados para {file.name}"
                 )
             else:
                 logger.warning(
                     f"[INGESTOR] No hay contenido principal para embedding en {file.name}, omitiendo."
                 )
-                processed_data["short_embeddings_attributes"] = []
-                processed_data["long_embeddings_attributes"] = []
+                processed_data["precomputed_vectors"] = []
 
             print(
                 f"[INGESTOR] Procesado exitosamente {file.name}, id: {processed_data['id']}"
@@ -157,53 +166,51 @@ class SentenceHTMLIngestor():
             subjects = [td.get_text(strip=True) for td in subjects_table.find_all("td")]
         data["subjects"] = subjects
 
+        judges = []
+
         signatories_table = soup.find("table", id="gridFirmantes")
-        signatories = []
         if signatories_table:
             tbody = signatories_table.find("tbody")
             if tbody:
                 for row in tbody.find_all("tr"):
                     cols = row.find_all("td")
                     if len(cols) >= 2:
-                        signatories.append(
+                        judges.append(
                             {
                                 "name": cols[0].get_text(strip=True),
-                                "role": cols[1].get_text(strip=True),
+                                "role": f"Firmante - {cols[1].get_text(strip=True)}",
                             }
                         )
-        data["signatories"] = signatories
 
         editors_table = soup.find("table", id="gridRedactores")
-        editors = []
         if editors_table:
             tbody = editors_table.find("tbody")
             if tbody:
                 for row in tbody.find_all("tr"):
                     cols = row.find_all("td")
                     if len(cols) >= 2:
-                        editors.append(
+                        judges.append(
                             {
                                 "name": cols[0].get_text(strip=True),
-                                "role": cols[1].get_text(strip=True),
+                                "role": f"Redactor - {cols[1].get_text(strip=True)}",
                             }
                         )
-        data["editors"] = editors
 
         discordants_table = soup.find("table", id="gridDiscordes")
-        discordants = []
         if discordants_table:
             tbody = discordants_table.find("tbody")
             if tbody:
                 for row in tbody.find_all("tr"):
                     cols = row.find_all("td")
                     if len(cols) >= 2:
-                        discordants.append(
+                        judges.append(
                             {
                                 "name": cols[0].get_text(strip=True),
-                                "role": cols[1].get_text(strip=True),
+                                "role": f"Discorde - {cols[1].get_text(strip=True)}",
                             }
                         )
-        data["discordants"] = discordants
+
+        data["judges"] = judges
 
         descriptors_table = soup.find("table", id="j_id77")
         descriptors = []

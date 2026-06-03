@@ -8,12 +8,12 @@ IMPO_BASE_URL = "https://www.impo.com.uy/"
 IMPO_SEARCH_URL = "https://www.impo.com.uy/cgi-bin/bases/consultaBasesBS.cgi?tipoServicio=3&realizarconsulta=SI&idconsulta={}&nrodocdesdehasta={}-{}"
 
 
-async def scrape_norms(start_date: datetime, end_date: datetime, type: int):
+async def scrape_norms(start_date: datetime, end_date: datetime, type: int, norm_type_str: str = "law"):
     try:
         import os
         print("[IMPO SCRAPER] Scraping norms for period: {} to {}".format(start_date.strftime("%d/%m/%Y"), end_date.strftime("%d/%m/%Y")))
         base_data_path = Path(os.getenv("LEXIA_BRAIN_DATA_PATH", "./data"))
-        path_file = base_data_path / "norms_links.txt"
+        path_file = base_data_path / "norms" / norm_type_str / "norms_links.txt"
         path_file.parent.mkdir(parents=True, exist_ok=True)
         file = open(path_file, "a")
 
@@ -66,21 +66,37 @@ async def scrape_norms(start_date: datetime, end_date: datetime, type: int):
                 await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 await page.wait_for_timeout(30000)
             rows = await page.query_selector_all(".table.table-hover tbody > tr")
+            best_links = {}
             for row in rows:
                 impo_link_cell = await row.query_selector("td:nth-child(2) > a")
+                if not impo_link_cell:
+                    continue
+                    
                 impo_link_cell_text = await impo_link_cell.inner_text()
+                impo_link = await impo_link_cell.get_attribute("href")
+                
+                if not impo_link:
+                    continue
+                
+                if "(" in impo_link_cell_text:
+                    norm_identifier = impo_link_cell_text.split("(")[0].strip()
+                    doc_type = impo_link_cell_text.split("(")[1].strip().lower()
+                else:
+                    norm_identifier = impo_link_cell_text.strip()
+                    doc_type = ""
+                    
+                if norm_identifier not in best_links:
+                    best_links[norm_identifier] = {"link": impo_link, "is_updated": "actualizado" in doc_type}
+                else:
+                    # Si ya existe, lo reemplazamos solo si el actual es "actualizado" y el anterior no lo era
+                    if "actualizado" in doc_type and not best_links[norm_identifier]["is_updated"]:
+                        best_links[norm_identifier] = {"link": impo_link, "is_updated": True}
 
-                if "Documento actualizado" in impo_link_cell_text :
-                    impo_link = await impo_link_cell.get_attribute("href")
-
-                    if impo_link:
-                        norm_count += 1
-                        print(f"[IMPO SCRAPER] Norm {norm_count}: {impo_link}")
-                        file.write(f"https://www.impo.com.uy/{impo_link}\n")
-                    else:
-                        print(
-                            f"[IMPO SCRAPER] No link found for norm {norm_count}"
-                        )
+            for norm_identifier, data in best_links.items():
+                norm_count += 1
+                impo_link = data["link"]
+                print(f"[IMPO SCRAPER] Norm {norm_count}: {impo_link}")
+                file.write(f"https://www.impo.com.uy/{impo_link}\n")
             
             print(f"[IMPO SCRAPER] Total norms scraped: {norm_count}")
 
